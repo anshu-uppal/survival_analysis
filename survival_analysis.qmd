@@ -15,6 +15,16 @@ reference-location: margin
 citation-location: margin
 ---
 
+# Initial exploration and processing
+I used the `rotterdam` dataset from the `survival` package, which includes 2982 primary breast cancers patients whose records were included in the Rotterdam tumor bank. 
+
+This dataset includes the events relapse and death, and the origin of the follow-up time is the time of the primary surgery. The two events recorded are disease relapse and death, and follow-up time is provided for each. 
+
+In the article from which this data stems, the authors restricted their dataset to the 1546 patients who had node-positive disease ("Since the validation dataset comprised only node-positive patients and nodal status is an important prognostic factor, we omitted the node-negative patients to create the derivation dataset.")  
+
+See:  
+Royston, P., Altman, D.G. External validation of a Cox prognostic model: principles and methods. BMC Med Res Methodol 13, 33 (2013). <https://doi.org/10.1186/1471-2288-13-33>
+
 ```{r}
 #| context: setup
 #| message: false
@@ -56,10 +66,7 @@ rotterdam_variables <- tribble(
 )
 ```
 
-# Initial exploration and processing
 ## Inspect Rotterdam data
-I used the `rotterdam` dataset from the `survival` package, which includes 2982 primary breast cancers patients whose records were included in the Rotterdam tumor bank.  
-
 I went through the package's documentation for the dataset to also include the descriptions of the variables, and used a custom function to summarise the dataset:
 ```{r}
 rotterdam |> 
@@ -80,6 +87,8 @@ Create new outcome variable `status`, where 0= alive without recurrence, 1= recu
 Also create `status_time` variable where I calculate days to first of reccurence, death or last follow-up
 ```{r}
 rotterdam_cleaned <- rotterdam |> 
+        # filter out node-negative patients
+        filter(nodes > 0) |> # as "nodal status is an important prognostic factor, we omitted the node-negative patients to create the derivation dataset"
         mutate(
                 # Convert several variables to factor
                 meno = fct_recode(factor(meno), premenopausal = "0", postmenopausal = "1"),
@@ -90,16 +99,11 @@ rotterdam_cleaned <- rotterdam |>
                 # Add categorical variable for number of nodes
                 nodes_cat = factor(
                         case_when(
-                                nodes == 0 ~ "0",
                                 nodes >0 & nodes <6 ~ "1-5",
                                 nodes >= 6 & nodes < 11 ~ "6-10",
                                 nodes >=11 ~ "11+"
                         ), 
-                        levels = c("0", "1-5", "6-10", "11+")),
-                
-                # Add dichotomized variable for number of nodes
-                nodes_dich = factor(
-                        case_when(nodes == 0 ~ "0",nodes >0 ~ "1+")),
+                        levels = c("1-5", "6-10", "11+")),
                 
                 # `status` where 0= alive without relapse, 1= relapse or death
                 status = case_when(recur==1|death==1 ~ 1, .default = 0),
@@ -109,7 +113,8 @@ rotterdam_cleaned <- rotterdam |>
                 age_cat = factor(case_when( 
                         age < 65  ~ "24-64",
                         age >= 65   ~ "65+"))
-        )
+        ) |> 
+        droplevels()
 # Update the rotterdam_variables object
 rotterdam_variables <- bind_rows(
         rotterdam_variables,
@@ -138,16 +143,21 @@ p1+p2+p3+p4+p5+p6+p7+p8+ plot_layout(ncol = 2)
 # Analysis
 ## Event: death
 ### Kaplan-Meier curve
+Survival probability at different timepoints
 ```{r}
 # Fit a Surv-type object for right-censored data
-survobj_d <- survival::Surv(time = rotterdam_cleaned$dtime, event = rotterdam_cleaned$death)
-# Fit the KM estimates using a formula where the Surv object "survobj" is the response variable.
-# "~ 1" signifies that we run the model for the overall survival  
-# rotterdam_surv_fit_d <-  survival::survfit(survobj_d ~ 1)
-rotterdam_surv_fit_d <-  ggsurvfit::survfit2(survobj_d ~ 1)
+rotterdam_surv_fit_d <-  
+        # survival::survfit(Surv(dtime, death) ~ 1, data = rotterdam_cleaned)
+        # Using survfit2 from the ggsurvfit package allows easier control for 
+        # downstream analysis using the ggsurvfit() function:
+        ggsurvfit::survfit2(Surv(dtime, death) ~ 1, data = rotterdam_cleaned)
 
 # Print its summary at specific times
 summary(rotterdam_surv_fit_d, times = seq(1000,7000,1000))
+```
+
+Mean survival time
+```{r}
 # Print mean survival time
 # (** Explore deeper the restricted mean survival time (RMST), used often in cancer survival analysis)
 print(rotterdam_surv_fit_d, print.rmean = TRUE)
@@ -156,12 +166,13 @@ print(rotterdam_surv_fit_d, print.rmean = TRUE)
 #### Overall plot
 ```{r}
 rotterdam_surv_fit_d |> 
-        ggsurvfit()+
-        add_censor_mark() +
-        add_confidence_interval() +
-        add_risktable() +
-        add_quantile(y_value = 0.5, color = "gray50", linewidth = 0.75) +
-        scale_ggsurvfit()
+        ggsurvfit(color = "tomato")+
+        add_censor_mark(color = "tomato", size = 1.5, alpha = 0.8) +
+        add_confidence_interval(fill = "tomato") +
+        add_risktable(risktable_stats = c("n.risk", "cum.censor", "cum.event")) +
+        add_quantile(y_value = 0.5, color = "gray60", linewidth = 0.5) +
+        scale_ggsurvfit()+
+        labs(title = "Overall survival after surgery")
 ```
 
 ```{r}
@@ -197,10 +208,10 @@ print(rotterdam_surv_fit_meno, print.rmean = TRUE)
 ```{r}
 rotterdam_surv_fit_meno |> 
         ggsurvfit()+
-        add_censor_mark() +
+        add_censor_mark(size = 1.5, alpha = 0.8) +
         add_confidence_interval() +
-        add_risktable() +
-        add_quantile(y_value = 0.5, color = "gray50", linewidth = 0.75) +
+        add_risktable(risktable_stats = c("n.risk", "cum.censor", "cum.event")) +
+        add_quantile(y_value = 0.5, color = "gray50", linewidth = 0.5) +
         scale_ggsurvfit()+
         add_pvalue()
 ```
