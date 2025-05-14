@@ -1,5 +1,5 @@
 ---
-title: "R coding to calculate standardised rates and ratios from cancer registry data"
+title: "A worked basic example of a survival analysis in R"
 author: "Anshu Uppal"
 date: last-modified
 format:
@@ -14,7 +14,11 @@ format:
 reference-location: margin
 citation-location: margin
 ---
-
+```{css}
+/* set DT table fontsizes */
+th { font-size: 11px; } /* header font */
+td { font-size: 11px; } /* cell font */
+```
 # Background
 I used the `rotterdam` dataset from the `survival` package, which includes 2982 primary breast cancers patients whose records were included in the Rotterdam tumor bank. 
 
@@ -33,6 +37,8 @@ Royston, P., Altman, D.G. External validation of a Cox prognostic model: princip
 ```{r}
 #| context: setup
 #| message: false
+
+# install.packages("pacman")
 pacman::p_load(
         here,
         tidyverse,
