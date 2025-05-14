@@ -15,15 +15,20 @@ reference-location: margin
 citation-location: margin
 ---
 
-# Initial exploration and processing
+# Background
 I used the `rotterdam` dataset from the `survival` package, which includes 2982 primary breast cancers patients whose records were included in the Rotterdam tumor bank. 
 
 This dataset includes the events relapse and death, and the origin of the follow-up time is the time of the primary surgery. The two events recorded are disease relapse and death, and follow-up time is provided for each. 
 
-In the article from which this data stems, the authors restricted their dataset to the 1546 patients who had node-positive disease ("Since the validation dataset comprised only node-positive patients and nodal status is an important prognostic factor, we omitted the node-negative patients to create the derivation dataset.")  
+In the article from which this data stems, the authors restricted their dataset to the 1546 patients who had node-positive disease ("Since the validation dataset comprised only node-positive patients and nodal status is an important prognostic factor, we omitted the node-negative patients to create the derivation dataset"). I decided to also restrict the dataset to only node-positive patients.
 
 See:  
 Royston, P., Altman, D.G. External validation of a Cox prognostic model: principles and methods. BMC Med Res Methodol 13, 33 (2013). <https://doi.org/10.1186/1471-2288-13-33>
+
+# Prognostic factors
+
+**Quoted paragraph from the article:**  
+"Candidate prognostic variables in the breast cancer datasets were age at primary surgery (age, years), menopausal status (meno, 0 = premenopausal, 1 = postmenopausal), tumour size (size), tumour grade (grade), number of positive lymph nodes (nodes), progesterone receptors (pgr, fmol/l), oestrogen receptors (er, fmol/l), hormonal treatment (hormon, 0 = no, 1 = yes), and chemotherapy (chemo). Tumour size (mm) was not available as a continuous variable in the Rotterdam dataset, therefore a standard coding was used; the base category was ≤ 20 mm and two dummy variables were used, namely 20 to 50 mm (sized1) and > 50 mm (sized2). *We excluded grade, since it was measured according to a different protocol in the two datasets, and chemo, since all patients in the validation dataset received chemotherapy.*
 
 ```{r}
 #| context: setup
@@ -43,8 +48,10 @@ pacman::p_load(
 # pak::pak("UEP-HUG/UEPtools")
 
 # Load in the rotterdam dataset from the survival package
-# "The rotterdam data set includes 2982 primary breast cancers patients whose records were included in the Rotterdam tumor bank."
-rotterdam <- survival::rotterdam
+rotterdam <- survival::rotterdam |> 
+        # filter out node-negative patients
+        filter(nodes > 0) # as "nodal status is an important prognostic factor, we omitted the node-negative patients to create the derivation dataset"
+
 # Add in the variable description
 rotterdam_variables <- tribble(
         ~name, ~value,
@@ -52,7 +59,7 @@ rotterdam_variables <- tribble(
         "year", "year of surgery", 
         "age", "age at surgery", 
         "meno", "menopausal status (0= premenopausal, 1= postmenopausal)", 
-        "size", "tumor size, a factor with levels <=20 20-50 >50", 
+        "size", "tumor size, a factor with levels <=20, 20-50, >50", 
         "grade", "differentiation grade", 
         "nodes", "number of positive lymph nodes", 
         "pgr", "progesterone receptors (fmol/l)", 
@@ -87,8 +94,6 @@ Create new outcome variable `status`, where 0= alive without recurrence, 1= recu
 Also create `status_time` variable where I calculate days to first of reccurence, death or last follow-up
 ```{r}
 rotterdam_cleaned <- rotterdam |> 
-        # filter out node-negative patients
-        filter(nodes > 0) |> # as "nodal status is an important prognostic factor, we omitted the node-negative patients to create the derivation dataset"
         mutate(
                 # Convert several variables to factor
                 meno = fct_recode(factor(meno), premenopausal = "0", postmenopausal = "1"),
@@ -113,8 +118,8 @@ rotterdam_cleaned <- rotterdam |>
                 age_cat = factor(case_when( 
                         age < 65  ~ "24-64",
                         age >= 65   ~ "65+"))
-        ) |> 
-        droplevels()
+        )
+
 # Update the rotterdam_variables object
 rotterdam_variables <- bind_rows(
         rotterdam_variables,
