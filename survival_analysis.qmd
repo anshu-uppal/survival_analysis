@@ -1,0 +1,232 @@
+---
+title: "R coding to calculate standardised rates and ratios from cancer registry data"
+author: "Anshu Uppal"
+date: last-modified
+format:
+        html:
+                code-fold: true
+                toc: true
+                toc-location: left  # Place TOC on the left side
+                toc-depth: 5        # Include headers up to level 3 (###)
+                toc-title: "On this page" # Custom title for the TOC
+                smooth-scroll: true # Enable smooth scrolling
+                embed-resources: true # Make the html file self contained
+reference-location: margin
+citation-location: margin
+---
+
+```{r}
+#| context: setup
+#| message: false
+pacman::p_load(
+        here,
+        tidyverse,
+        survival,
+        survminer,
+        janitor,
+        DT
+)
+
+# Custom package with useful function for summarising dataframe
+# pak::pak("UEP-HUG/UEPtools")
+
+# Load in the rotterdam dataset from the survival package
+# "The rotterdam data set includes 2982 primary breast cancers patients whose records were included in the Rotterdam tumor bank."
+rotterdam <- survival::rotterdam
+# Add in the variable description
+rotterdam_variables <- tribble(
+        ~name, ~value,
+        "pid", "patient identifier", 
+        "year", "year of surgery", 
+        "age", "age at surgery", 
+        "meno", "menopausal status (0= premenopausal, 1= postmenopausal)", 
+        "size", "tumor size, a factor with levels <=20 20-50 >50", 
+        "grade", "differentiation grade", 
+        "nodes", "number of positive lymph nodes", 
+        "pgr", "progesterone receptors (fmol/l)", 
+        "er", "estrogen receptors (fmol/l)", 
+        "hormon", "hormonal treatment (0=no, 1=yes)", 
+        "chemo", "chemotherapy", 
+        "rtime", "days to relapse or last follow-up", 
+        "recur", "0= no relapse, 1= relapse", 
+        "dtime", "days to death or last follow-up", 
+        "death", "0= alive, 1= dead"
+)
+```
+
+# Initial exploration
+## Inspect Rotterdam data
+```{r}
+rotterdam |> 
+        UEPtools::metadata_generator_any(variable_names = rotterdam_variables) |> 
+        DT::datatable(
+                filter = "top",
+                options = list(
+                        pageLength = 26
+                ),
+                rownames = FALSE, # set to FALSE for cleaner look
+                class = 'cell-border stripe hover nowrap compact'
+        )
+
+rotterdam |> ggplot()+geom_histogram(aes(x=age))
+rotterdam |> ggplot()+geom_histogram(aes(x=nodes))
+rotterdam |> ggplot()+geom_histogram(aes(x=pgr))
+rotterdam |> ggplot()+geom_histogram(aes(x=er))
+```
+
+# Process dataset for downstream analysis
+Create new outcome variable `stats`, where 0= alive without recurrence, 1= recurrence or death.  
+Also create `status_time` variable where I calculate days to first of reccurence, death or last follow-up
+```{r}
+rotterdam_cleaned <- rotterdam |> 
+        mutate(
+                # Convert several variables to factor
+                meno = fct_recode(factor(meno), premenopausal = "0", postmenopausal = "1"),
+                grade = factor(grade),
+                hormon = fct_recode(factor(hormon), No = "0", Yes = "1"),
+                chemo = fct_recode(factor(chemo), No = "0", Yes = "1"),
+                # `status` where 0= alive without recurrence, 1= recurrence or death
+                status = case_when(recur==1|death==1 ~ 1, .default = 0),
+                # Calculate days to first of reccurence, death or last follow-up
+                status_time = case_when(recur==1 ~ rtime, .default = dtime),
+                # Add age categories
+                age_cat = factor(case_when( 
+                        age < 40  ~ "24-39",
+                        age >= 40 & age < 50 ~ "40-49",
+                        age >= 50 & age < 60 ~ "50-59",
+                        age >= 60 & age < 70 ~ "60-69",
+                        age >= 70   ~ "70+"))
+        )
+```
+
+## Explore variables in relation to status
+```{r}
+for (i in names(rotterdam_cleaned)[c(3:11,18)]) {
+        rotterdam_cleaned |> 
+                group_by(.data[[i]]) |> 
+                summarise(mean_status = mean(status, na.rm = TRUE))
+}
+```
+
+
+# Surv-type object ####
+```{r}
+# Fit a Surv-type object for right-censored data
+survobj <- survival::Surv(time = rotterdam_cleaned$status_time, event = rotterdam_cleaned$status)
+# Fit the KM estimates using a formula where the Surv object "survobj" is the response variable.
+# "~ 1" signifies that we run the model for the overall survival  
+rotterdam_surv_fit <-  survival::survfit(survobj ~ 1)
+# Print its summary at specific times
+summary(rotterdam_surv_fit, times = seq(1000,7000,1000))
+# Print mean survival time
+# (** Explore deeper the restricted mean survival time (RMST), used often in cancer survival analysis)
+print(rotterdam_surv_fit, print.rmean = TRUE)
+```
+
+# Plot
+```{r}
+survminer::ggsurvplot(
+        rotterdam_surv_fit, 
+        data = rotterdam_cleaned,          # again specify the data used to fit linelistsurv_fit_sex 
+        conf.int = TRUE,              # do not show confidence interval of KM estimates
+        surv.scale = "percent",        # present probabilities in the y axis in %
+        break.time.by = 1000,            # present the time axis with an increment of 10 days
+        xlab = "Follow-up days",
+        ylab = "Probability of survival without recurrence",
+        # pval = T,                      # print p-value of Log-rank test 
+        # pval.coord = c(40,.91),        # print p-value at these plot coordinates
+        risk.table = T,                # print the risk table at bottom 
+        # legend.title = "Gender",       # legend characteristics
+        # legend.labs = c("Female","Male"),
+        font.legend = 10, 
+        # palette = "Dark2",             # specify color palette 
+        surv.median.line = "hv",       # draw horizontal and vertical lines to the median survivals
+        ggtheme = theme_light()        # simplify plot background
+)
+```
+
+# Comparison of survival curves ####
+## By tumor size ####
+```{r}
+rotterdam_surv_fit_meno <-  survfit(Surv(status_time, status) ~ meno, data = rotterdam_cleaned)
+
+survminer::ggsurvplot(
+        rotterdam_surv_fit_meno, 
+        data = rotterdam_cleaned,          # again specify the data used to fit linelistsurv_fit_sex 
+        conf.int = TRUE,              # do not show confidence interval of KM estimates
+        surv.scale = "percent",        # present probabilities in the y axis in %
+        break.time.by = 1000,            # present the time axis with an increment of 10 days
+        xlab = "Follow-up days",
+        ylab = "Probability of survival without recurrence",
+        pval = T,                      # print p-value of Log-rank test 
+        pval.coord = c(7000,.91),        # print p-value at these plot coordinates
+        risk.table = T,                # print the risk table at bottom 
+        legend.title = "Menopausal status",       # legend characteristics
+        # legend.labs = c("Female","Male"),
+        font.legend = 10, 
+        # palette = "Dark2",             # specify color palette 
+        surv.median.line = "hv",       # draw horizontal and vertical lines to the median survivals
+        ggtheme = theme_light()        # simplify plot background
+)
+```
+
+## Compare survival by menopausal status
+Using a log-rank test, which accounts for the whole follow-up period. By comparing the actual number of events in each group with the number that would be anticipated if event rates were the same, a chi-squared test is used to determine if any observed differences are statistically meaningful.
+```{r}
+survdiff(Surv(status_time, status) ~ meno, rho = 0, data = rotterdam_cleaned) 
+```
+
+
+# Cox proportional hazards
+First check models with individual predictors
+```{r}
+# Plot KM curve
+predictors = c("meno", "size", "grade", "chemo")
+for (i in predictors) {
+survminer::ggsurvplot(
+        fit = survfit(as.formula(paste0("Surv(status_time, status) ~", i)), data = rotterdam_cleaned),
+        risk.table = TRUE,
+        break.time.by = 1000            # present the time axis with an increment of 10 days
+        # legend.labs = 
+        )
+}
+```
+
+
+```{r}
+##  ####
+#fit the model
+rotterdam_cox <- 
+        coxph(Surv(status_time, status) ~ meno + size + grade + chemo,
+        data = rotterdam_cleaned
+)
+summary(rotterdam_cox)
+```
+
+## Test assumptions
+### Proportional hazards
+```{r}
+#test the proportional hazard assumption
+rotterdam_test <- cox.zph(rotterdam_cox)
+rotterdam_test
+# graphical verification of this assumption:
+survminer::ggcoxzph(rotterdam_test)
+# Deviance residuals: look for outliers or influential data points. 
+ggcoxdiagnostics(rotterdam_cox, type = "dfbeta", 
+                 linear.predictions = FALSE, ggtheme = theme_bw())
+# Plot KM curve
+survminer::ggsurvplot(
+        fit = survfit(Surv(status_time, status) ~ meno, data = rotterdam_cleaned),
+        risk.table = TRUE,
+        break.time.by = 1000,            # present the time axis with an increment of 10 days
+        legend.labs = c("Premenopausal","Postmenopausal")
+        )
+rotterdam_cox <- 
+        coxph(Surv(status_time, status) ~ meno+chemo, # + size + grade + chemo,
+        data = rotterdam_cleaned
+)
+
+# Forest plots ####
+survminer::ggforest(rotterdam_cox, data = rotterdam_cleaned)
+```
+
