@@ -1,1 +1,1 @@
-# template
+# A worked basic example of a survival analysis in R
