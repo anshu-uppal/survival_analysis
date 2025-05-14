@@ -294,7 +294,6 @@ The 'GLOBAL' test appears to show that the PH assumption is violated for the ove
 ```{r}
 #| fig-height: 12
 #| fig-width: 10
-survminer::ggcoxzph(rotterdam_test)
+wrap_plots(survminer::ggcoxzph(rotterdam_test), ncol =2)
 ```
-
-**Taking into account the results of the test of the proportional hazards assumption, and also after visually inspecting the Schoenfeld residuals, it appears that the validity of the proportional hazards assumption is in doubt. The next steps may involve some combination of transformation of variables and/or consideration of including time-dependent interaction terms.**
+**While the results of the test of the proportional hazards assumption imply violation of the proportional hazards assumption, after visually inspecting the Schoenfeld residuals the validity of the assumption may still be argued to hold. Still, next steps may involve some combination of transformation of variables and/or consideration of including time-dependent interaction terms.**
