@@ -90,8 +90,8 @@ rotterdam |>
 ```
 
 ## Process dataset for downstream analysis
-Create new outcome variable `status`, where 0= alive without recurrence, 1= recurrence or death.  
-Also create `status_time` variable where I calculate days to first of reccurence, death or last follow-up
+Create new outcome variable `rd`, where 0= alive without relapse, 1= relapse or death.  
+Also create `rd_time` variable where I calculate days to first of relapse, death or last follow-up
 ```{r}
 rotterdam_cleaned <- rotterdam |> 
         mutate(
@@ -104,16 +104,15 @@ rotterdam_cleaned <- rotterdam |>
                 # Add categorical variable for number of nodes
                 nodes_cat = factor(
                         case_when(
-                                nodes >0 & nodes <6 ~ "1-5",
-                                nodes >= 6 & nodes < 11 ~ "6-10",
-                                nodes >=11 ~ "11+"
-                        ), 
-                        levels = c("1-5", "6-10", "11+")),
+                                nodes >0 & nodes <4 ~ "1-3",
+                                nodes >= 4 & nodes < 9 ~ "4-9",
+                                nodes >=9 ~ "9+"
+                        )),
                 
                 # `status` where 0= alive without relapse, 1= relapse or death
-                status = case_when(recur==1|death==1 ~ 1, .default = 0),
+                rd = case_when(recur==1|death==1 ~ 1, .default = 0),
                 # Calculate days to first of relapse, death or last follow-up
-                status_time = case_when(recur==1 ~ rtime, .default = dtime),
+                rd_time = case_when(recur==1 ~ rtime, .default = dtime),
                 # Add categorical age variable
                 age_cat = factor(case_when( 
                         age < 65  ~ "24-64",
@@ -125,8 +124,8 @@ rotterdam_variables <- bind_rows(
         rotterdam_variables,
         tribble(
                 ~name, ~value,
-                "status", "0= alive without relapse, 1= relapse or death",
-                "status_time", "days to death/relapse or last follow-up",
+                "rd", "0= alive without relapse, 1= relapse or death",
+                "rd_time", "days to relapse/death or last follow-up",
                 "age_cat", "age category at surgery")
 )
 ```
@@ -135,70 +134,48 @@ rotterdam_variables <- bind_rows(
 ```{r}
 #| message: false
 p1 <- rotterdam_cleaned |> ggplot()+geom_histogram(aes(x=age))+labs(x="age at surgery")
-p2 <- rotterdam_cleaned |> ggplot()+geom_bar(aes(x=age_cat))+labs(x="age category at surgery")
+p2 <- rotterdam_cleaned |> ggplot()+geom_bar(aes(x=size))+labs(x="tumor size")
 p3 <- rotterdam_cleaned |> ggplot()+geom_histogram(aes(x=nodes))+labs(x="number of positive lymph nodes")
 p4 <- rotterdam_cleaned |> ggplot()+geom_histogram(aes(x=pgr))+labs(x="progesterone receptors (fmol/l)")
 p5 <- rotterdam_cleaned |> ggplot()+geom_histogram(aes(x=er))+labs(x="estrogen receptors (fmol/l)")
-p6 <- rotterdam_cleaned |> ggplot()+geom_histogram(aes(x=rtime))+labs(x="days to relapse or last follow-up")
-p7 <- rotterdam_cleaned |> ggplot()+geom_histogram(aes(x=dtime))+labs(x="days to death or last follow-up")
-p8 <- rotterdam_cleaned |> ggplot()+geom_histogram(aes(x=status_time))+labs(x="days to death/relapse or last follow-up")
+p6 <- rotterdam_cleaned |> ggplot()+geom_bar(aes(x=hormon))+labs(x="hormonal treatment")
+p7 <- rotterdam_cleaned |> ggplot()+geom_bar(aes(x=meno))+labs(x="menopausal status")
+p8 <- rotterdam_cleaned |> ggplot()+geom_histogram(aes(x=rd_time))+labs(x="days to relapse/death or last follow-up")
 
 p1+p2+p3+p4+p5+p6+p7+p8+ plot_layout(ncol = 2)
 ```
 # Analysis
 ## Event: death
 ### Kaplan-Meier curve
-Survival probability at different timepoints
+Relapse-free survival probability at different timepoints
 ```{r}
 # Fit a Surv-type object for right-censored data
-rotterdam_surv_fit_d <-  
-        # survival::survfit(Surv(dtime, death) ~ 1, data = rotterdam_cleaned)
+rotterdam_surv_fit_rd <-  
+        # survival::survfit(Surv(rd_time, rd) ~ 1, data = rotterdam_cleaned)
         # Using survfit2 from the ggsurvfit package allows easier control for 
         # downstream analysis using the ggsurvfit() function:
-        ggsurvfit::survfit2(Surv(dtime, death) ~ 1, data = rotterdam_cleaned)
+        ggsurvfit::survfit2(Surv(rd_time, rd) ~ 1, data = rotterdam_cleaned)
 
 # Print its summary at specific times
-summary(rotterdam_surv_fit_d, times = seq(1000,7000,1000))
+summary(rotterdam_surv_fit_rd, times = seq(1000,7000,1000))
 ```
 
 Mean survival time
 ```{r}
-# Print mean survival time
-# (** Explore deeper the restricted mean survival time (RMST), used often in cancer survival analysis)
-print(rotterdam_surv_fit_d, print.rmean = TRUE)
+print(rotterdam_surv_fit_rd, print.rmean = TRUE)
 ```
 
 #### Overall plot
 ```{r}
-rotterdam_surv_fit_d |> 
+rotterdam_surv_fit_rd |> 
         ggsurvfit(color = "tomato")+
         add_censor_mark(color = "tomato", size = 1.5, alpha = 0.8) +
         add_confidence_interval(fill = "tomato") +
         add_risktable(risktable_stats = c("n.risk", "cum.censor", "cum.event")) +
         add_quantile(y_value = 0.5, color = "gray60", linewidth = 0.5) +
         scale_ggsurvfit()+
-        labs(title = "Overall survival after surgery")
+        labs(title = "Relapse-free survival after surgery")
 ```
-
-```{r}
-survminer::ggsurvplot(
-        rotterdam_surv_fit_d, 
-        data = rotterdam_cleaned,  # again specify the data used
-        conf.int = TRUE,          
-        surv.scale = "percent",    # present probabilities in the y axis in %
-        break.time.by = 1000,   # time axis increments
-        xlab = "Follow-up days",
-        ylab = "Probability of survival",
-        risk.table = T,                # print the risk table at bottom 
-        # legend.title = "Gender",       # legend characteristics
-        # legend.labs = c("Female","Male"),
-        font.legend = 10, 
-        # palette = "Dark2",             # specify color palette 
-        surv.median.line = "hv",       # draw horizontal and vertical lines to the median survivals
-        ggtheme = theme_light()        # simplify plot background
-)
-```
-
 #### Comparison of survival curves
 ## By menopausal status
 ```{r}
