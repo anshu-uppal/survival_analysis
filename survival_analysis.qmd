@@ -47,6 +47,7 @@ pacman::p_load(
         ggsurvfit,
         janitor,
         DT,
+        flextable,
         patchwork # easily combine plots
 )
 
@@ -77,12 +78,43 @@ rotterdam_variables <- tribble(
         "dtime", "days to death or last follow-up", 
         "death", "0= alive, 1= dead"
 )
+
+# Define a function for generating a clean table from the KM estimates
+KM_table <- function(x){
+        x |> # the survfit2() object
+                ggsurvfit::tidy_survfit(times = seq(1000,7000,1000)) |> 
+                dplyr::relocate(std.error, .after = conf.low) |> 
+                dplyr::mutate(across(c(estimate:conf.low), ~round(.x,2))) |> 
+                dplyr::mutate(std.error = round(std.error, 4)) |> 
+                dplyr::select(-c(estimate_type:conf.level)) |> 
+                flextable::flextable() |> 
+                flextable::fontsize(size = 9, part = "all") |> 
+                autofit() |> 
+                flextable::theme_zebra()
+}
+
+# Define a function for generating the KM curves
+KM_plot <- function(x, strataname = NULL){
+        x |> 
+                ggsurvfit()+
+                add_censor_mark(size = 1.5, alpha = 0.8) +
+                add_confidence_interval() +
+                add_risktable(risktable_stats = c("n.risk", "cum.censor", "cum.event")) +
+                add_quantile(y_value = 0.5, color = "gray50", linewidth = 0.5) +
+                scale_ggsurvfit()+
+                add_pvalue()+
+                labs(title = "Relapse-free survival after surgery",
+                     color = strataname,
+                     fill = strataname
+                )
+}
 ```
 
 # Inspect Rotterdam data
 I went through the package's documentation for the dataset to also include the descriptions of the variables, and used a custom function to summarise the dataset:
 ```{r}
 #| message: false
+print(paste0("Number of patients analyzed: ", nrow(rotterdam)))
 rotterdam |> 
         UEPtools::metadata_generator_any(variable_names = rotterdam_variables) |> 
         select(-Num_Values) |> 
@@ -161,12 +193,11 @@ rotterdam_surv_fit_rd <-
         # Using survfit2 from the ggsurvfit package allows easier control for 
         # downstream analysis using the ggsurvfit() function:
         ggsurvfit::survfit2(Surv(rd_time, rd) ~ 1, data = rotterdam_cleaned)
-
 # Print its summary at specific times
-summary(rotterdam_surv_fit_rd, times = seq(1000,7000,1000))
+rotterdam_surv_fit_rd |> KM_table()
 ```
 
-**Mean survival time:**
+**Restricted Mean Survival Time (RMST):**
 ```{r}
 print(rotterdam_surv_fit_rd, print.rmean = TRUE)
 ```
@@ -186,80 +217,40 @@ rotterdam_surv_fit_rd |>
 **Survival probabilities:**
 ```{r}
 rotterdam_surv_fit_meno <-  ggsurvfit::survfit2(Surv(rd_time, rd) ~ meno, data = rotterdam_cleaned)
-
-summary(rotterdam_surv_fit_meno, times = seq(1000,7000,1000))
+rotterdam_surv_fit_meno |> KM_table() |> hline(7)
 ```
 
-**Mean survival time:**
+**Restricted Mean Survival Time:**
 ```{r}
 # Print mean survival time
 print(rotterdam_surv_fit_meno, print.rmean = TRUE)
 ```
 **KM curve:**
 ```{r}
-rotterdam_surv_fit_meno |> 
-        ggsurvfit()+
-        add_censor_mark(size = 1.5, alpha = 0.8) +
-        add_confidence_interval() +
-        add_risktable(risktable_stats = c("n.risk", "cum.censor", "cum.event")) +
-        add_quantile(y_value = 0.5, color = "gray50", linewidth = 0.5) +
-        scale_ggsurvfit()+
-        add_pvalue()+
-        labs(title = "Relapse-free survival after surgery")
+rotterdam_surv_fit_meno |> KM_plot()
 ```
 #### Log-rank test
 Use a log-rank test, which accounts for the whole follow-up period. By comparing the observed number of events in each group with the number that would be expected if event rates were the same, a chi-squared test is used to determine if any observed differences are statistically meaningful.
 ```{r}
-survdiff(Surv(rd_time, rd) ~ meno, rho = 0, data = rotterdam_cleaned) 
+survdiff(Surv(rd_time, rd) ~ meno, rho = 0, data = rotterdam_cleaned)
 ```
 
 ## Regression modelling (CoxPH)
 
 ### Visually inspect individual KM curves for covariates
+**Numeric covariates are categorized here only to aid visualisation**
 ```{r}
 rotterdam_surv_fit_age_cat <-  survfit2(Surv(rd_time, rd) ~ age_cat, data = rotterdam_cleaned)
-rotterdam_surv_fit_age_cat |> 
-        ggsurvfit()+
-        add_censor_mark(size = 1.5, alpha = 0.8) +
-        add_confidence_interval() +
-        add_risktable(risktable_stats = c("n.risk", "cum.censor", "cum.event")) +
-        add_quantile(y_value = 0.5, color = "gray50", linewidth = 0.5) +
-        scale_ggsurvfit()+
-        add_pvalue()+
-        labs(title = "Relapse-free survival after surgery")
+rotterdam_surv_fit_age_cat |> KM_plot(strataname = "Age category")
 
 rotterdam_surv_fit_size <-  survfit2(Surv(rd_time, rd) ~ size, data = rotterdam_cleaned)
-rotterdam_surv_fit_size |> 
-        ggsurvfit()+
-        add_censor_mark(size = 1.5, alpha = 0.8) +
-        add_confidence_interval() +
-        add_risktable(risktable_stats = c("n.risk", "cum.censor", "cum.event")) +
-        add_quantile(y_value = 0.5, color = "gray50", linewidth = 0.5) +
-        scale_ggsurvfit()+
-        add_pvalue()+
-        labs(title = "Relapse-free survival after surgery")
+rotterdam_surv_fit_size |> KM_plot(strataname = "Tumor size")
 
 rotterdam_surv_fit_hormon <-  survfit2(Surv(rd_time, rd) ~ hormon, data = rotterdam_cleaned)
-rotterdam_surv_fit_hormon |> 
-        ggsurvfit()+
-        add_censor_mark(size = 1.5, alpha = 0.8) +
-        add_confidence_interval() +
-        add_risktable(risktable_stats = c("n.risk", "cum.censor", "cum.event")) +
-        add_quantile(y_value = 0.5, color = "gray50", linewidth = 0.5) +
-        scale_ggsurvfit()+
-        add_pvalue()+
-        labs(title = "Relapse-free survival after surgery")
+rotterdam_surv_fit_hormon |> KM_plot(strataname = "Hormonal treatment")
 
 rotterdam_surv_fit_nodes_cat <-  survfit2(Surv(rd_time, rd) ~ nodes_cat, data = rotterdam_cleaned)
-rotterdam_surv_fit_nodes_cat |> 
-        ggsurvfit()+
-        add_censor_mark(size = 1.5, alpha = 0.8) +
-        add_confidence_interval() +
-        add_risktable(risktable_stats = c("n.risk", "cum.censor", "cum.event")) +
-        add_quantile(y_value = 0.5, color = "gray50", linewidth = 0.5) +
-        scale_ggsurvfit()+
-        add_pvalue()+
-        labs(title = "Relapse-free survival after surgery")
+rotterdam_surv_fit_nodes_cat |> KM_plot(strataname = "Number of nodes")
 ```
 
 ### Cox model specification
@@ -297,3 +288,6 @@ The 'GLOBAL' test appears to show that the PH assumption is violated for the ove
 wrap_plots(survminer::ggcoxzph(rotterdam_test), ncol =2)
 ```
 **While the results of the test of the proportional hazards assumption imply violation of the proportional hazards assumption, after visually inspecting the Schoenfeld residuals the validity of the assumption may still be argued to hold. Still, next steps may involve some combination of transformation of variables and/or consideration of including time-dependent interaction terms.**
+
+We could additionally further explore comparing estimates of Restricted Mean Survival Time (RMST), e.g. see:  
+Han K, Jung I. Restricted Mean Survival Time for Survival Analysis: A Quick Guide for Clinical Researchers. Korean J Radiol. 2022 May;23(5):495-499. doi: [10.3348/kjr.2022.0061](https://doi.org/10.3348/kjr.2022.0061). PMID: 35506526; PMCID: PMC9081686.
