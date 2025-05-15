@@ -327,3 +327,6 @@ wrap_plots(survminer::ggcoxzph(rotterdam_test), ncol =2)
 
 We could additionally further explore comparing estimates of Restricted Mean Survival Time (RMST), e.g. see:  
 Han K, Jung I. Restricted Mean Survival Time for Survival Analysis: A Quick Guide for Clinical Researchers. Korean J Radiol. 2022 May;23(5):495-499. doi: [10.3348/kjr.2022.0061](https://doi.org/10.3348/kjr.2022.0061)
+
+"We conclude that the hazard ratio cannot be recommended as a general measure of the treatment effect in a randomized controlled trial, nor is it always appropriate when designing a trial. Restricted mean survival time may provide a practical way forward and deserves greater attention."  
+-  Royston, P., Parmar, M.K. Restricted mean survival time: an alternative to the hazard ratio for the design and analysis of randomized trials with a time-to-event outcome. BMC Med Res Methodol 13, 152 (2013). <https://doi.org/10.1186/1471-2288-13-152>
