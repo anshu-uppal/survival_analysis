@@ -148,6 +148,23 @@ rotterdam_cleaned <- rotterdam |>
                                 nodes >=9 ~ "9+"
                         )),
                 
+                # Add categorical variable for number of estrogen receptors
+                er_cat = factor(
+                        case_when(
+                                er <41 ~ "0-40",
+                                er >= 41 & er <301 ~ "41-300",
+                                er >=301 ~ "301+"
+                        ),levels = c("0-40", "41-300", "301+")),
+                
+                # Add categorical variable for number of progesterone receptors
+                pgr_cat = factor(
+                        case_when(
+                                pgr <21 ~ "0-20",
+                                pgr >= 21 & pgr <201 ~ "21-200",
+                                pgr >=201 ~ "201+"
+                        ),levels = c("0-20", "21-200", "201+")
+                        ),
+                
                 # `rd` where 0= alive without relapse, 1= relapse or death
                 rd = case_when(recur==1|death==1 ~ 1, .default = 0),
                 # Calculate days to first of relapse, death or last follow-up
@@ -251,6 +268,12 @@ rotterdam_surv_fit_hormon |> KM_plot(strataname = "Hormonal treatment")
 
 rotterdam_surv_fit_nodes_cat <-  survfit2(Surv(rd_time, rd) ~ nodes_cat, data = rotterdam_cleaned)
 rotterdam_surv_fit_nodes_cat |> KM_plot(strataname = "Number of nodes")
+
+rotterdam_surv_fit_pgr_cat <-  survfit2(Surv(rd_time, rd) ~ pgr_cat, data = rotterdam_cleaned)
+rotterdam_surv_fit_pgr_cat |> KM_plot(strataname = "progesterone receptors (fmol/l)")
+
+rotterdam_surv_fit_er_cat <-  survfit2(Surv(rd_time, rd) ~ er_cat, data = rotterdam_cleaned)
+rotterdam_surv_fit_er_cat |> KM_plot(strataname = "estrogen receptors (fmol/l)")
 ```
 
 ### Cox model specification
