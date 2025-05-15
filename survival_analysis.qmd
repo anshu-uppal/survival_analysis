@@ -215,8 +215,14 @@ rotterdam_surv_fit_rd |> KM_table()
 ```
 
 **Restricted Mean Survival Time (RMST):**
+Restricted Mean Survival Time (RMST) is a statistical measure used in survival analysis that offers a clinically meaningful way to compare survival outcomes between groups. It represents the average event-free survival time up to a pre-specified time point, and is defined as the area under the survival curve from time zero up to a specific, pre-defined time point. (using the `survival` package, I can only print the RMST for single groups or strata, but for more detailed comparisons between groups (e.g. getting the difference in RMST with confidence intervals) I could try more specialised packages, e.g. `survRM2`.
+
+"The RMST may provide valuable information for comparing two survival curves when the proportional hazards assumption is not met, such as in cases of crossing or delayed separation of survival curves."  
+-  Han K, Jung I. *Restricted Mean Survival Time for Survival Analysis: A Quick Guide for Clinical Researchers*. Korean J Radiol. 2022 May;23(5):495-499. doi: [10.3348/kjr.2022.0061](https://doi.org/10.3348/kjr.2022.0061)
+
+**For this analysis, I've set the restriction time at 5 years (1,825 days):**
 ```{r}
-print(rotterdam_surv_fit_rd, print.rmean = TRUE)
+print(rotterdam_surv_fit_rd, rmean = 365*5,  print.rmean = TRUE)
 ```
 
 ### Overall plot
@@ -238,10 +244,17 @@ rotterdam_surv_fit_meno |> KM_table() |> hline(7)
 ```
 
 **Restricted Mean Survival Time:**
+*Over 5 years (1825 days)*
 ```{r}
 # Print mean survival time
-print(rotterdam_surv_fit_meno, print.rmean = TRUE)
+print(rotterdam_surv_fit_meno, rmean = 365*5, print.rmean = TRUE)
 ```
+*Over 10 years (3650 days)*
+```{r}
+# Print mean survival time
+print(rotterdam_surv_fit_meno, rmean = 365*10, print.rmean = TRUE)
+```
+
 **KM curve:**
 ```{r}
 rotterdam_surv_fit_meno |> KM_plot()
@@ -313,4 +326,4 @@ wrap_plots(survminer::ggcoxzph(rotterdam_test), ncol =2)
 **While the results of the test of the proportional hazards assumption imply violation of the proportional hazards assumption, after visually inspecting the Schoenfeld residuals the validity of the assumption may still be argued to hold. Still, next steps may involve some combination of transformation of variables and/or consideration of including time-dependent interaction terms.**
 
 We could additionally further explore comparing estimates of Restricted Mean Survival Time (RMST), e.g. see:  
-Han K, Jung I. Restricted Mean Survival Time for Survival Analysis: A Quick Guide for Clinical Researchers. Korean J Radiol. 2022 May;23(5):495-499. doi: [10.3348/kjr.2022.0061](https://doi.org/10.3348/kjr.2022.0061). PMID: 35506526; PMCID: PMC9081686.
+Han K, Jung I. Restricted Mean Survival Time for Survival Analysis: A Quick Guide for Clinical Researchers. Korean J Radiol. 2022 May;23(5):495-499. doi: [10.3348/kjr.2022.0061](https://doi.org/10.3348/kjr.2022.0061)
