@@ -14,11 +14,6 @@ format:
 reference-location: margin
 citation-location: margin
 ---
-```{css}
-/* set DT table fontsizes */
-th { font-size: 11px; } /* header font */
-td { font-size: 11px; } /* cell font */
-```
 # Background
 I used the `rotterdam` dataset from the `survival` package, which includes 2982 primary breast cancers patients whose records were included in the Rotterdam tumor bank. 
 
@@ -45,6 +40,7 @@ pacman::p_load(
         survival,
         survminer,
         ggsurvfit,
+        survRM2, # calculate RMST with confidence intervals
         janitor,
         DT,
         flextable,
@@ -110,6 +106,12 @@ KM_plot <- function(x, strataname = NULL){
 }
 ```
 
+```{css}
+/* set DT table fontsizes */
+th { font-size: 11px; } /* header font */
+td { font-size: 11px; } /* cell font */
+```
+
 # Inspect Rotterdam data
 I went through the package's documentation for the dataset to also include the descriptions of the variables, and used a custom function to summarise the dataset:
 ```{r}
@@ -163,7 +165,7 @@ rotterdam_cleaned <- rotterdam |>
                                 pgr >= 21 & pgr <201 ~ "21-200",
                                 pgr >=201 ~ "201+"
                         ),levels = c("0-20", "21-200", "201+")
-                        ),
+                ),
                 
                 # `rd` where 0= alive without relapse, 1= relapse or death
                 rd = case_when(recur==1|death==1 ~ 1, .default = 0),
@@ -330,3 +332,37 @@ Han K, Jung I. Restricted Mean Survival Time for Survival Analysis: A Quick Guid
 
 "We conclude that the hazard ratio cannot be recommended as a general measure of the treatment effect in a randomized controlled trial, nor is it always appropriate when designing a trial. Restricted mean survival time may provide a practical way forward and deserves greater attention."  
 -  Royston, P., Parmar, M.K. Restricted mean survival time: an alternative to the hazard ratio for the design and analysis of randomized trials with a time-to-event outcome. BMC Med Res Methodol 13, 152 (2013). <https://doi.org/10.1186/1471-2288-13-152>
+
+## RMST
+First show again the RMST estimates from the `survival` package for 5-year (1825 days) survival (no confidence intervals given for the RMST estimates):
+```{r}
+rotterdam_surv_fit_meno <-  ggsurvfit::survfit2(Surv(rd_time, rd) ~ meno, data = rotterdam_cleaned)
+print(rotterdam_surv_fit_meno, rmean = 365*5, print.rmean = TRUE)
+```
+Calculate and compare 5-year (1825 days) survival in the menopausal status groups using the `survRM2` package, which includes confidence intervals for the RMST estimates (arm = 0: premenopausal, arm = 1: postmenopausal)
+```{r}
+rmst_meno <- survRM2::rmst2(
+        time = rotterdam_cleaned$rd_time, 
+        status = rotterdam_cleaned$rd, 
+        arm = as.numeric(rotterdam_cleaned$meno)-1,
+        tau = 1825
+) 
+rmst_meno
+```
+**From the above, the unadjusted RMST ratio of postmenopausal:premenopausal is 0.905 [95% CI: 0.860, 0.952], i.e. RMST is significantly lower among postmenopausal relative to premenopausal.**  
+
+### Model with covariates (`survRM2` package)
+Run the same model as above, but add in all of the covariates
+```{r}
+rmst_meno_c <- survRM2::rmst2(
+        time = rotterdam_cleaned$rd_time, 
+        status = rotterdam_cleaned$rd, 
+        arm = as.numeric(rotterdam_cleaned$meno)-1,
+        tau = 1825,
+        covariates = c(rotterdam_cleaned$age, rotterdam_cleaned$size,
+                       rotterdam_cleaned$nodes, rotterdam_cleaned$pgr,
+                       rotterdam_cleaned$er, rotterdam_cleaned$hormon)
+) 
+rmst_meno_c
+```
+**From the above, the adjusted RMST ratio of postmenopausal:premenopausal is 0.880 [95% CI: 0.874, 0.887], i.e. RMST remains significantly lower among postmenopausal relative to premenopausal after adjustment.**
