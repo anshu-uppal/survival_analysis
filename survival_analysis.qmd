@@ -1,7 +1,8 @@
 ---
 title: "A worked basic example of a survival analysis in R"
 author: "Anshu Uppal"
-date: last-modified
+date: "2025-05-14"
+date-modified: last-modified # Dynamic modified date
 format:
         html:
                 code-fold: true
@@ -29,6 +30,9 @@ Royston, P., Altman, D.G. External validation of a Cox prognostic model: princip
 **Quoted paragraph from the article:**  
 "Candidate prognostic variables in the breast cancer datasets were age at primary surgery (age, years), menopausal status (meno, 0 = premenopausal, 1 = postmenopausal), tumour size (size), tumour grade (grade), number of positive lymph nodes (nodes), progesterone receptors (pgr, fmol/l), oestrogen receptors (er, fmol/l), hormonal treatment (hormon, 0 = no, 1 = yes), and chemotherapy (chemo). Tumour size (mm) was not available as a continuous variable in the Rotterdam dataset, therefore a standard coding was used; the base category was ≤ 20 mm and two dummy variables were used, namely 20 to 50 mm (sized1) and > 50 mm (sized2). *We excluded grade, since it was measured according to a different protocol in the two datasets, and chemo, since all patients in the validation dataset received chemotherapy.*"
 
+# Inspect Rotterdam data
+## Setup
+Code for loading of packages and the dataset, as well as definitions of functions for generating the KM curves and KM estimates tables.
 ```{r}
 #| context: setup
 #| message: false
@@ -105,14 +109,13 @@ KM_plot <- function(x, strataname = NULL){
                 )
 }
 ```
-
+Set the fontsizes for the DT tables
 ```{css}
 /* set DT table fontsizes */
 th { font-size: 11px; } /* header font */
 td { font-size: 11px; } /* cell font */
 ```
 
-# Inspect Rotterdam data
 I went through the package's documentation for the dataset to also include the descriptions of the variables, and used a custom function to summarise the dataset:
 ```{r}
 #| message: false
@@ -366,3 +369,30 @@ rmst_meno_c <- survRM2::rmst2(
 rmst_meno_c
 ```
 **From the above, the adjusted RMST ratio of postmenopausal:premenopausal is 0.880 [95% CI: 0.874, 0.887], i.e. RMST remains significantly lower among postmenopausal relative to premenopausal after adjustment.**
+
+<!-- # Competing risk modelling -->
+<!-- The `cmprsk` package and the `tidycmprsk` wrapper package can be used for more advanced competing risk modelling, e.g. where the event, e.g. death, could have multiple causes, e.g. "death from cancer", "death from heart failure", "death from other causes", etc. -->
+<!-- ```{r} -->
+<!-- pacman::p_load( -->
+<!--         tidycmprsk -->
+<!-- ) -->
+<!-- ``` -->
+
+
+<!-- ::: {.callout-tip collapse="true"} -->
+<!-- ## Expand to see a little more background on competing risk models -->
+
+<!-- From <https://www.publichealth.columbia.edu/research/population-health-methods/competing-risk-analysis>:   -->
+
+<!-- In standard survival data, subjects are supposed to experience only one type of event over follow-up, such as death from breast cancer. On the contrary, in real life, subjects can potentially experience more than one type of a certain event. For instance, if mortality is of research interest, then our observations – senior patients at an oncology department, could possibly die from heart attack or breast cancer, or even traffic accident. When only one of these different types of event can occur, we refers to these events as “competing events”, in a sense that they compete with each other to deliver the event of interest, and the occurrence of one type of event will prevent the occurrence of the others. As a result, we call the probability of these events as “competing risks”, in a sense that the probability of each competing event is somehow regulated by the other competing events, which has an interpretation suitable to describe the survival process determined by multiple types of events. -->
+
+<!-- To better understand the competing event scenario, consider the following examples: -->
+
+<!-- 1) A patient can die from breast cancer or from stroke, but he cannot die from both; -->
+<!-- 2) A breast cancer patient may die after surgery before they can develop hospital infection; -->
+<!-- 3) A soldier may die during a combat or in a traffic accident. -->
+
+<!-- In the examples above, there are more than one pathway that a subject can fail, but the failure, either death or infection, can only occur once for each subject (without considering recurring event). Therefore, the failures caused by different pathways are mutually exclusive and hence called competing events. Analysis of such data requires special considerations. -->
+
+<!-- Traditional methods to describe survival process, such Kaplan Meier product-limit method, are not designed to accommodate the competing nature of multiple causes to the same event, therefore they tend to produce inaccurate estimates when analyzing the marginal probability for cause-specific events. As an work-around, Cumulative Incidence Function (CIF) was proposed to solve this particular issue by estimating the marginal probability of a certain event as a function of its cause-specific probability and overall survival probability. -->
+<!-- ::: -->
